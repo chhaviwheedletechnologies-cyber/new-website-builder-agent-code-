@@ -11,7 +11,15 @@ import concurrent.futures
 import base64
 from pathlib import Path
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / "output"
+TEMPLATES_DIR = OUTPUT_DIR / "templates"
+STATUS_FILE = OUTPUT_DIR / "status.txt"
+
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+
+load_dotenv(BASE_DIR / ".env")
 
 
 def generate_ai_image(client, prompt, output_path):
@@ -37,21 +45,22 @@ def generate_ai_image(client, prompt, output_path):
         return None
 
 
-def build_image_prompt(industry, page, section):
+def build_image_prompt(industry, page, section, goal=""):
     return f"""
-Create a premium website illustration.
+Create a premium, photorealistic website image.
 
-Business: {industry}
-Page: {page}
+
+Business industry: {industry}
+Website page: {page}
+Business objective: {goal}
 Section: {section}
 
-Style:
-- Modern
-- Professional
-- No text
-- High quality
-- Consistent branding
-- Website hero quality
+Requirements:
+- Image must be directly relevant to the business and section.
+- Show realistic objects, people, or environments for this industry.
+- Professional lighting and modern art direction.
+- Wide landscape composition suitable for a website.
+- No text, watermark, fake logos, or unrelated stock imagery.
 """
 
 
@@ -289,7 +298,7 @@ def _call_llm(client: OpenAI, system_prompt: str, user_prompt: str) -> str:
 
         # status.txt me bhi error likho
         try:
-            status_file = os.path.join(os.getcwd(), "output", "status.txt")
+            status_file = str(STATUS_FILE)
             with open(status_file, "a", encoding="utf-8") as f:
                 f.write(error_msg + "\n")
         except Exception:
@@ -439,9 +448,9 @@ def template_design_agent(state: OrchestratorState) -> Dict[str, Any]:
     # FIX: use the key loaded from the environment above, instead of a
     # hardcoded literal key. Never commit real API keys into source code.
     client = OpenAI(
-        api_key="+ api_key"
-    )
-    base_dir = os.path.join(os.getcwd(), "output", "templates")
+        api_key=api_key, timeout=120.0)
+    
+    base_dir = str(TEMPLATES_DIR)
     run_id = str(uuid.uuid4())[:8]
     output_dir = os.path.join(base_dir, f"template_{run_id}")
     os.makedirs(output_dir, exist_ok=True)
@@ -465,7 +474,7 @@ def template_design_agent(state: OrchestratorState) -> Dict[str, Any]:
         except Exception as e:
             print(f"[TemplateAgent] Logo processing failed: {e}")
 
-    status_file = os.path.join(os.getcwd(), "output", "status.txt")
+    status_file = str(STATUS_FILE)
     with open(status_file, "w", encoding="utf-8") as f:
         f.write(f"Generating Template [{run_id}]...\n")
 
@@ -608,7 +617,12 @@ def template_design_agent(state: OrchestratorState) -> Dict[str, Any]:
         # other generated image was silently dropped. Now every successfully
         # generated section image is collected.
         for section in sections:
-            prompt = build_image_prompt(industry, page_label, section)
+            prompt = build_image_prompt(
+                industry,
+                page_label,
+                section,
+                goal=f"{client_goal}. Brand context: {brand_context}"
+            )
 
             filename = generate_ai_image(
                 client,
