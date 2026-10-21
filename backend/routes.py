@@ -6,6 +6,11 @@ import os
 import shutil
 import traceback
 from fastapi.responses import FileResponse
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / "output"
+TEMPLATES_DIR = OUTPUT_DIR / "templates"
 
 router = APIRouter()
 
@@ -32,13 +37,21 @@ def run_campaign(goal: CampaignGoal):
 
 @router.get("/download/{run_id}.zip")
 async def download_template(run_id: str):
-    template_dir = os.path.join(os.getcwd(), "output", "templates", f"template_{run_id}")
-    if not os.path.exists(template_dir):
+    template_dir = TEMPLATES_DIR / f"template_{run_id}"
+    if not template_dir.exists():
         raise HTTPException(status_code=404, detail="Template not found")
         
-    zip_path = os.path.join(os.getcwd(), "output", f"website_{run_id}.zip")
+    zip_path = OUTPUT_DIR / f"website_{run_id}.zip"
     
     if not os.path.exists(zip_path):
-        shutil.make_archive(zip_path.replace(".zip", ""), 'zip', template_dir)
+        shutil.make_archive(
+            str(zip_path.with_suffix("")),
+            "zip",
+            str(template_dir)
+        )
         
-    return FileResponse(zip_path, media_type="application/zip", filename=f"ai_website_{run_id}.zip")
+    return FileResponse(
+        str(zip_path),
+        media_type="application/zip",
+        filename=f"ai_website_{run_id}.zip"
+    )
